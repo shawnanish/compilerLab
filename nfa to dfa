@@ -1,0 +1,233 @@
+#include <stdio.h>
+#include <string.h>
+#include <stdbool.h>
+
+#define MAX 100
+#define ALPHABET 2
+
+struct NFA_State {
+    int transitions[ALPHABET][MAX];
+    int numTransitions[ALPHABET];
+};
+
+int dfa[MAX][ALPHABET]; // DFA transition table
+bool isFinalDFA[MAX];  // Array to mark DFA final states
+
+// Function prototype for displayDFA
+void displayDFA(int dfa[MAX][ALPHABET], int dfaStates[MAX][MAX], int numDFAStates, bool isFinalDFA[MAX]);
+
+// Helper function to compare two DFA states
+bool compareStates(int state1[MAX], int state2[MAX]) {
+    int i = 0;
+    while (state1[i] != -1 && state2[i] != -1) {
+        if (state1[i] != state2[i]) {
+            return false;
+        }
+        i++;
+    }
+    return state1[i] == state2[i]; // Ensure both terminate at the same time
+}
+
+// Function to check if a DFA state is a final state
+bool isFinalState(int dfaState[MAX], bool isFinalNFA[MAX]) {
+    for (int i = 0; dfaState[i] != -1; i++) {
+        if (isFinalNFA[dfaState[i]]) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// Function to convert NFA to DFA
+void convertNFAToDFA(struct NFA_State nfa[], int nfaStates, int initialState, bool isFinalNFA[MAX]) {
+    int dfaStates[MAX][MAX]; // Stores DFA states as sets of NFA states
+    int numDFAStates = 0;    // Number of DFA states
+
+    // Initialize the first DFA state with the initial NFA state
+    memset(dfaStates, -1, sizeof(dfaStates)); // Mark all as unused
+    memset(isFinalDFA, false, sizeof(isFinalDFA)); // Initialize all DFA states as non-final
+    dfaStates[numDFAStates][0] = initialState;
+    dfaStates[numDFAStates][1] = -1; // End marker for the list of NFA states
+    isFinalDFA[numDFAStates] = isFinalState(dfaStates[numDFAStates], isFinalNFA); // Check if it's a final state
+    numDFAStates++;
+
+    int currentDFAState = 0;
+
+    while (currentDFAState < numDFAStates) {
+        for (int sym = 0; sym < ALPHABET; sym++) {
+            int newState[MAX] = {0}; // Temporary storage for the new DFA state
+            int numNewStates = 0;
+
+            // Process all NFA states in the current DFA state
+            for (int i = 0; dfaStates[currentDFAState][i] != -1; i++) {
+                int nfaState = dfaStates[currentDFAState][i];
+
+                // Process transitions for the current NFA state on the current symbol
+                for (int j = 0; j < nfa[nfaState].numTransitions[sym]; j++) {
+                    int nextNFAState = nfa[nfaState].transitions[sym][j];
+
+                    // Check if the next state is already in newState
+                    bool exists = false;
+                    for (int k = 0; k < numNewStates; k++) {
+                        if (newState[k] == nextNFAState) {
+                            exists = true;
+                            break;
+                        }
+                    }
+
+                    if (!exists && numNewStates < MAX) {
+                        newState[numNewStates++] = nextNFAState;
+                    }
+                }
+            }
+
+            // Ensure newState is terminated with -1 for comparison
+            newState[numNewStates] = -1;
+
+            // Check if newState already exists in DFA states
+            int existingState = -1;
+            for (int i = 0; i < numDFAStates; i++) {
+                if (compareStates(dfaStates[i], newState)) {
+                    existingState = i;
+                    break;
+                }
+            }
+
+            // If newState doesn't exist, add it to DFA states
+            if (existingState == -1 && numNewStates > 0) {
+                memcpy(dfaStates[numDFAStates], newState, sizeof(newState));
+                isFinalDFA[numDFAStates] = isFinalState(newState, isFinalNFA); // Check if the new state is final
+                existingState = numDFAStates++;
+            }
+
+            // Update the DFA transition table
+            dfa[currentDFAState][sym] = existingState;
+        }
+
+        currentDFAState++;
+    }
+
+    // Display the DFA states
+    displayDFA(dfa, dfaStates, numDFAStates, isFinalDFA);
+}
+
+// Function to display DFA transition table and final states
+void displayDFA(int dfa[MAX][ALPHABET], int dfaStates[MAX][MAX], int numDFAStates, bool isFinalDFA[MAX]) {
+    printf("\nDFA Transition Table:\n");
+    printf("State\ta\tb\tFinal\n");
+
+    for (int i = 0; i < numDFAStates; i++) {
+        printf("{");
+        // Print the states for the current DFA state in set notation
+        for (int j = 0; dfaStates[i][j] != -1; j++) {
+            printf("%d", dfaStates[i][j]);
+            if (dfaStates[i][j + 1] != -1) {
+                printf(",");
+            }
+        }
+        printf("}\t");
+
+        // Print the transition states for 'a'
+        if (dfa[i][0] != -1) {
+            printf("{");
+            for (int j = 0; dfaStates[dfa[i][0]][j] != -1; j++) {
+                printf("%d", dfaStates[dfa[i][0]][j]);
+                if (dfaStates[dfa[i][0]][j + 1] != -1) {
+                    printf(",");
+                }
+            }
+            printf("}\t");
+        } else {
+            printf("-\t");
+        }
+
+        // Print the transition states for 'b'
+        if (dfa[i][1] != -1) {
+            printf("{");
+            for (int j = 0; dfaStates[dfa[i][1]][j] != -1; j++) {
+                printf("%d", dfaStates[dfa[i][1]][j]);
+                if (dfaStates[dfa[i][1]][j + 1] != -1) {
+                    printf(",");
+                }
+            }
+            printf("}\t");
+        } else {
+            printf("-\t");
+        }
+
+        // Mark if it's a final state
+        if (isFinalDFA[i]) {
+            printf("Yes\n");
+        } else {
+            printf("No\n");
+        }
+    }
+}
+
+int main() {
+    struct NFA_State nfa[MAX];
+    int nfaStates, initialState;
+    bool isFinalNFA[MAX];
+
+    printf("Enter the number of states in the NFA: ");
+    scanf("%d", &nfaStates);
+
+    // Ensure number of states is within bounds
+    if (nfaStates <= 0 || nfaStates > MAX) {
+        printf("Invalid number of states.\n");
+        return 1;
+    }
+
+    for (int i = 0; i < nfaStates; i++) {
+        for (int sym = 0; sym < ALPHABET; sym++) {
+            printf("Enter the number of transitions for state %d on symbol %d: ", i, sym);
+            scanf("%d", &nfa[i].numTransitions[sym]);
+
+            // Ensure transition count is valid
+            if (nfa[i].numTransitions[sym] < 0 || nfa[i].numTransitions[sym] >= MAX) {
+                printf("Invalid number of transitions.\n");
+                return 1;
+            }
+
+            printf("Enter the transition states: ");
+            for (int j = 0; j < nfa[i].numTransitions[sym]; j++) {
+                scanf("%d", &nfa[i].transitions[sym][j]);
+
+                // Ensure transition state is valid
+                if (nfa[i].transitions[sym][j] < 0 || nfa[i].transitions[sym][j] >= nfaStates) {
+                    printf("Invalid transition state.\n");
+                    return 1;
+                }
+            }
+        }
+    }
+
+    printf("Enter the initial state of the NFA: ");
+    scanf("%d", &initialState);
+
+    // Ensure the initial state is valid
+    if (initialState < 0 || initialState >= nfaStates) {
+        printf("Invalid initial state.\n");
+        return 1;
+    }
+
+    // Input NFA final states
+    printf("Enter the final states of the NFA (use -1 to end): ");
+    memset(isFinalNFA, false, sizeof(isFinalNFA)); // Initialize all as non-final
+    int finalState;
+    while (true) {
+        scanf("%d", &finalState);
+        if (finalState == -1) {
+            break;
+        }
+        if (finalState < 0 || finalState >= nfaStates) {
+            printf("Invalid final state.\n");
+            return 1;
+        }
+        isFinalNFA[finalState] = true;
+    }
+
+    convertNFAToDFA(nfa, nfaStates, initialState, isFinalNFA);
+
+    return 0;
+}
